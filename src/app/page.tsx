@@ -1,74 +1,124 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import '../styles/Home.css';
+
+const PLACEHOLDER_TEXTS = [
+  "I spend 5k on dining monthly and want maximum cashback",
+  "Looking for a travel card with good airport lounge access",
+  "Need a card with low interest rate and no annual fee",
+  "Want a card that gives best rewards on online shopping",
+  "I travel internationally often, need forex benefits"
+];
 
 export default function Home() {
   const [query, setQuery] = useState('');
+  const [isDarkMode, setIsDarkMode] = useState(false); // Default to light mode
+  const [currentPlaceholder, setCurrentPlaceholder] = useState(PLACEHOLDER_TEXTS[0]);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const placeholderInterval = useRef<NodeJS.Timeout>();
+
+  useEffect(() => {
+    // Apply theme class to body
+    document.body.className = isDarkMode ? 'dark-theme' : 'light-theme';
+  }, [isDarkMode]);
+
+  // Rotating placeholder effect
+  useEffect(() => {
+    let currentIndex = 0;
+    placeholderInterval.current = setInterval(() => {
+      currentIndex = (currentIndex + 1) % PLACEHOLDER_TEXTS.length;
+      setCurrentPlaceholder(PLACEHOLDER_TEXTS[currentIndex]);
+    }, 3000);
+
+    return () => {
+      if (placeholderInterval.current) {
+        clearInterval(placeholderInterval.current);
+      }
+    };
+  }, []);
+
+  // Auto-resize textarea
+  const adjustTextareaHeight = () => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.style.height = 'auto';
+      textarea.style.height = `${textarea.scrollHeight}px`;
+    }
+  };
+
+  const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setQuery(e.target.value);
+    adjustTextareaHeight();
+  };
 
   return (
     <div className="container">
-      <header className="header">
-        <h1>What do you want to know?</h1>
+      <header className="app-header">
+        <div className="logo-container">
+          <svg className="logo" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="2" y="4" width="20" height="16" rx="2" fill="url(#cardGradient)" />
+            <rect x="4" y="8" width="4" height="3" rx="0.5" fill="white" opacity="0.8" />
+            <path d="M4 14h16" stroke="white" strokeWidth="0.5" opacity="0.3" />
+            <path d="M4 17h16" stroke="white" strokeWidth="0.5" opacity="0.3" />
+            <defs>
+              <linearGradient id="cardGradient" x1="2" y1="4" x2="22" y2="20">
+                <stop offset="0%" stopColor="#0066FF" />
+                <stop offset="100%" stopColor="#00CC66" />
+              </linearGradient>
+            </defs>
+          </svg>
+          <span className="logo-text">CardGenius.AI</span>
+        </div>
+        <div className="header-actions">
+          <button 
+            className="theme-toggle"
+            onClick={() => setIsDarkMode(!isDarkMode)}
+            aria-label="Toggle theme"
+          >
+            {isDarkMode ? (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            ) : (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            )}
+          </button>
+        </div>
       </header>
 
-      <main>
+      <main className="main-content">
+        <h1 className="main-title">CardGenius.AI will find you the best credit card</h1>
         <div className="search-container">
-          <input
-            type="text"
-            className="search-input"
-            placeholder="Ask anything..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          
+          <div className="search-input-wrapper">
+            <textarea
+              ref={textareaRef}
+              className="search-input"
+              placeholder={currentPlaceholder}
+              value={query}
+              onChange={handleInput}
+              rows={1}
+              onFocus={() => {
+                if (placeholderInterval.current) {
+                  clearInterval(placeholderInterval.current);
+                }
+              }}
+            />
+          </div>
           <div className="actions">
-            <span className="pro-badge">pro</span>
-            
-            <button className="deep-research">
-              <svg viewBox="0 0 14 14" fill="none" stroke="currentColor">
-                <path d="M6 10L10 6M10 6H7M10 6V9" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            <button className="send-button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path d="M22 2L11 13M22 2L15 22L11 13L2 9L22 2Z" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
-              Deep Research
             </button>
-            
-            <div className="action-icons">
-              <button className="icon-button">
-                <svg viewBox="0 0 20 20" fill="currentColor">
-                  <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM4.332 8.027c.81-1.652 2.568-2.978 4.616-3.01A5.534 5.534 0 0110 5c2.76 0 5 2.24 5 5s-2.24 5-5 5-5-2.24-5-5c0-.642.12-1.255.332-1.827z"/>
-                </svg>
-              </button>
-              
-              <button className="icon-button">
-                <svg viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 4 4 0 005.656 0l3-3a4 4 0 00-5.656-5.656l-1.5 1.5a1 1 0 101.414 1.414l1.5-1.5zm-5 5a2 2 0 012.828 0 1 1 0 101.414-1.414 4 4 0 00-5.656 0l-3 3a4 4 0 105.656 5.656l1.5-1.5a1 1 0 10-1.414-1.414l-1.5 1.5a2 2 0 11-2.828-2.828l3-3z" clipRule="evenodd"/>
-                </svg>
-              </button>
-              
-              <button className="icon-button mic">
-                <svg viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clipRule="evenodd"/>
-                </svg>
-              </button>
-            </div>
           </div>
         </div>
       </main>
 
       <footer className="footer">
-        <a href="#" className="pro">Pro</a>
-        <a href="#">Enterprise</a>
-        <a href="#">API</a>
-        <a href="#">Blog</a>
-        <a href="#">Careers</a>
-        <a href="#">Store</a>
-        <a href="#">Finance</a>
-        <button className="language-selector">
-          English
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor">
-            <path d="M4 6l4 4 4-4" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        </button>
+        <p>CardGenius is a proprietary product of BankKaro © 2025</p>
       </footer>
     </div>
   );
