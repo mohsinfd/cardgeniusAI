@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server'
 import OpenAI from 'openai'
 
+if (!process.env.OPENAI_API_KEY) {
+  throw new Error('Missing OPENAI_API_KEY environment variable')
+}
+
 // Initialize OpenAI client
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -116,209 +120,71 @@ Would you like to modify anything before I proceed with the recommendations?`
 
 export async function POST(req: Request) {
   try {
-    const { message, context = [], unansweredQuestions = [] } = await req.json()
-
-    if (!message) {
-      return NextResponse.json(
-        { error: 'Message is required' },
-        { status: 400 }
-      )
-    }
-
-    // Construct the conversation history
-    const conversationHistory = context
-      .filter((msg: string | null) => msg !== null)
-      .map((msg: string, index: number) => ({
-        role: index % 2 === 0 ? 'user' : 'assistant',
-        content: msg
-      }))
-
-    // Add the current message
-    conversationHistory.push({ role: 'user', content: message })
-
-    // Construct the system message with context about unanswered questions
-    const systemMessage = unansweredQuestions.length > 0
-      ? `${SYSTEM_PROMPT}\n\nThe user has not yet answered these questions: ${unansweredQuestions.join(', ')}. Please consider this when generating your response.`
-      : SYSTEM_PROMPT
+    const { message } = await req.json()
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4",
       messages: [
-        { role: "system", content: systemMessage },
-        ...conversationHistory
+        {
+          role: "system",
+          content: "You are CardGenius, an AI assistant that extracts spending amounts from user input. Extract numeric values and categorize them into appropriate spending categories."
+        },
+        { role: "user", content: message }
       ],
-      temperature: 0.7,
-      max_tokens: 1000,
+      model: "gpt-3.5-turbo",
     })
 
-    const response = completion.choices[0].message.content
-
-    if (!response) {
-      throw new Error('No response from OpenAI')
-    }
-
-    // Initialize spending data
-    const spendingData: SpendingData = {
-      monthly: {
-        amazon_spends: 0,
-        flipkart_spends: 0,
-        grocery_spends_online: 0,
-        online_food_ordering: 0,
-        other_online_spends: 0,
-        other_offline_spends: 0,
-        dining_or_going_out: 0,
-        fuel: 0,
-        school_fees: 0,
-        rent: 0,
-        mobile_phone_bills: 0,
-        electricity_bills: 0,
-        water_bills: 0,
-        ott_channels: 0
-      },
-      annual: {
-        hotels_annual: 0,
-        flights_annual: 0,
-        insurance_health_annual: 0,
-        insurance_car_or_bike_annual: 0,
-        large_electronics_purchase_like_mobile_tv_etc: 0
-      },
-      quarterly: {
-        domestic_lounge_usage_quarterly: 0,
-        international_lounge_usage_quarterly: 0,
-        railway_lounge_usage_quarterly: 0,
-        movie_usage: 0,
-        movie_mov: 0,
-        dining_usage: 0,
-        dining_mov: 0,
-        online_food_ordering_mov: 0,
-        online_food_ordering_usage: 0
-      }
-    }
-
-    // Extract spending data from the message
-    const amountMatches = message.match(/(\d+)\s*(?:lac|lakh|thousand|k|rs|₹)/gi)
-    if (amountMatches) {
-      amountMatches.forEach(match => {
-        const value = parseInt(match.match(/\d+/)[0])
-        const unit = match.toLowerCase()
-        
-        // Convert to rupees
-        let amount = value
-        if (unit.includes('lac') || unit.includes('lakh')) {
-          amount = value * 100000
-        } else if (unit.includes('thousand') || unit.includes('k')) {
-          amount = value * 1000
-        }
-
-        // Update relevant spending fields based on context
-        const messageLower = message.toLowerCase()
-        if (messageLower.includes('rent')) {
-          spendingData.monthly.rent = amount
-        } else if (messageLower.includes('amazon')) {
-          spendingData.monthly.amazon_spends = amount
-        } else if (messageLower.includes('flipkart')) {
-          spendingData.monthly.flipkart_spends = amount
-        } else if (messageLower.includes('dining') || messageLower.includes('restaurant')) {
-          spendingData.monthly.dining_or_going_out = amount
-        } else if (messageLower.includes('fuel') || messageLower.includes('petrol')) {
-          spendingData.monthly.fuel = amount
-        } else if (messageLower.includes('flight') || messageLower.includes('fly')) {
-          spendingData.annual.flights_annual = amount
-        }
-      })
-    }
-
-    // Extract follow-up questions using a more robust pattern
-    const followUpQuestions = response
-      .split('\n')
-      .filter(line => line.trim().startsWith('-') || line.trim().startsWith('•'))
-      .map(line => line.replace(/^[-•]\s*/, '').trim())
-      .filter(line => line.length > 0 && line.includes('?'))
-
-    // If no questions found with bullet points, try to find questions in the text
-    if (followUpQuestions.length === 0) {
-      const questionMatches = response.match(/[^.!?]+\?/g)
-      if (questionMatches) {
-        followUpQuestions.push(...questionMatches.map(q => q.trim()))
-      }
-    }
-
-    // Filter out questions that have already been answered in the context
-    const answeredQuestions = context.join(' ').toLowerCase()
-    const filteredFollowUpQuestions = followUpQuestions.filter(question => {
-      const questionKey = question.toLowerCase()
-      return !answeredQuestions.includes(questionKey)
-    })
-
-    // Check if we have sufficient data to close the conversation
-    const shouldCloseConversation = hasSufficientData(spendingData, context)
-
-    // Extract categories and context text for API call
-    const contextText = context.join(' ').toLowerCase()
-    const categories = []
-    if (contextText.includes('travel')) categories.push('travel')
-    if (contextText.includes('reward')) categories.push('rewards')
-    if (contextText.includes('cashback')) categories.push('cashback')
-    if (contextText.includes('student')) categories.push('student')
-    if (contextText.includes('business')) categories.push('business')
-    if (contextText.includes('fuel')) categories.push('fuel')
-    if (contextText.includes('dining')) categories.push('dining')
-
-    // If we have sufficient data, generate final confirmation question and call CardGenius API
-    let cardRecommendations = null
-    if (shouldCloseConversation) {
-      try {
-        // Call CardGenius API with the spending data
-        const cardGeniusResponse = await fetch('https://api.cardgenius.com/v1/recommendations', {
+    const aiResponse = completion.choices[0].message.content
+    
+    // Parse the response to extract spending data
+    let spendingData: SpendingData | undefined
+    try {
+      // Attempt to parse spending data from AI response
+      const parsedResponse = JSON.parse(aiResponse)
+      spendingData = parsedResponse.spending_data as SpendingData
+      
+      // If we have valid spending data, call CardGenius API
+      if (spendingData && 
+          (Object.values(spendingData.monthly).some(val => val > 0) ||
+           Object.values(spendingData.annual).some(val => val > 0) ||
+           Object.values(spendingData.quarterly).some(val => val > 0))) {
+        const cardGeniusResponse = await fetch('https://bk-prod-external.bankkaro.com/cg/api/pro', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${process.env.CARDGENIUS_API_KEY}`,
           },
           body: JSON.stringify({
-            spending_data: spendingData,
-            preferences: {
-              primary_category: categories[0] || 'general',
-              preferred_merchants: contextText.includes('amazon') ? ['amazon'] : 
-                                contextText.includes('flipkart') ? ['flipkart'] : [],
-              preferred_offer_types: contextText.includes('cashback') ? ['cashback'] :
-                                   contextText.includes('reward') ? ['rewards'] : [],
-            }
-          })
+            ...spendingData,
+            new_monthly_cat_1: 0,
+            new_monthly_cat_2: 0,
+            new_monthly_cat_3: 0,
+            new_cat_1: 0,
+            new_cat_2: 0,
+            new_cat_3: 0,
+            selected_card_id: null
+          }),
         })
 
         if (!cardGeniusResponse.ok) {
           throw new Error('Failed to get card recommendations')
         }
 
-        cardRecommendations = await cardGeniusResponse.json()
-      } catch (error) {
-        console.error('Error calling CardGenius API:', error)
-        // Continue without recommendations if the API call fails
+        const recommendations = await cardGeniusResponse.json()
+        return NextResponse.json({
+          message: aiResponse,
+          recommendations,
+          spending_data: spendingData
+        })
       }
+    } catch (e) {
+      console.error('Failed to process spending data:', e)
     }
 
-    // If we have sufficient data, generate final confirmation question
-    const finalConfirmationQuestion = shouldCloseConversation 
-      ? generateConfirmationQuestion(spendingData, context)
-      : null
-
-    // Extract confidence based on the response quality
-    const confidence = response.length > 200 ? 'high' : 
-                     response.length > 100 ? 'medium' : 'low'
-
-    return NextResponse.json({
-      spending_data: spendingData,
-      follow_up_messages: shouldCloseConversation ? [finalConfirmationQuestion] : filteredFollowUpQuestions,
-      confidence,
-      should_close_conversation: shouldCloseConversation,
-      final_confirmation: shouldCloseConversation,
-      card_recommendations: cardRecommendations
-    })
+    // If no spending data or processing failed, return just the AI response
+    return NextResponse.json({ message: aiResponse })
   } catch (error) {
-    console.error('Error:', error)
+    console.error('API Error:', error)
     return NextResponse.json(
-      { error: 'Failed to process request' },
+      { error: 'Internal server error' },
       { status: 500 }
     )
   }
