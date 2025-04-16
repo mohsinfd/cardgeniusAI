@@ -10,25 +10,36 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 })
 
-const SYSTEM_PROMPT = `You are a credit card recommendation assistant. Your task is to:
-1. Extract spending data from user messages
-2. Ask relevant follow-up questions to gather more information
-3. Provide recommendations based on the user's needs
+const SYSTEM_PROMPT = `You are CardGenius, an AI assistant that helps users find the best credit card based on their spending habits.
 
-For travel-related requests, ask about:
-- Domestic vs international travel frequency
-- Preferred airlines and hotel chains
-- Average annual spend on flights and hotels
-- Lounge access preferences
-- Travel insurance needs
+Your primary tasks are:
+1. Extract spending amounts from user messages
+2. Ask relevant follow-up questions about correlated spending categories
+3. Maintain conversation context
 
-When extracting spending data:
-- Look for amounts in the format "X lac" and convert to rupees (1 lac = 100,000)
-- Look for amounts with currency symbols (₹, Rs, etc.)
-- Look for amounts with words like "thousand", "lakh", "crore"
-- Update the spending_data object with the extracted values
+Follow these rules:
+- Always ask at least one follow-up question about a correlated spending category
+- Convert all amounts to rupees (e.g., "1 lakh" = 100,000)
+- Look for amounts with currency symbols (₹, Rs) or words (thousand, lakh, crore)
+- Keep track of what information has been provided
+- Don't repeat questions that have already been answered
 
-Always include relevant follow-up questions to gather more information, but avoid repeating questions that have already been answered.`
+Correlated spending categories:
+- Flights + Hotels
+- Insurance + Pharmacy
+- Flights + Lounge Access
+- Amazon + Other Online Shopping
+- Online Food + Dining
+
+Format your response as JSON with this structure:
+{
+  "message": "Your response message",
+  "spending_data": {
+    "category": amount,
+    ...
+  },
+  "follow_up_question": "Your follow-up question"
+}`
 
 interface SpendingData {
   monthly: {
@@ -120,67 +131,27 @@ Would you like to modify anything before I proceed with the recommendations?`
 
 export async function POST(req: Request) {
   try {
-    const { message } = await req.json()
+    const { messages } = await req.json()
+    
+    if (!Array.isArray(messages)) {
+      return NextResponse.json(
+        { error: 'Messages must be an array' },
+        { status: 400 }
+      )
+    }
 
     const completion = await openai.chat.completions.create({
       messages: [
-        {
-          role: "system",
-          content: "You are CardGenius, an AI assistant that extracts spending amounts from user input. Extract numeric values and categorize them into appropriate spending categories."
-        },
-        { role: "user", content: message }
+        { role: "system", content: SYSTEM_PROMPT },
+        ...messages
       ],
       model: "gpt-3.5-turbo",
+      response_format: { type: "json_object" }
     })
 
-    const aiResponse = completion.choices[0].message.content
+    const response = JSON.parse(completion.choices[0].message.content)
     
-    // Parse the response to extract spending data
-    let spendingData: SpendingData | undefined
-    try {
-      // Attempt to parse spending data from AI response
-      const parsedResponse = JSON.parse(aiResponse)
-      spendingData = parsedResponse.spending_data as SpendingData
-      
-      // If we have valid spending data, call CardGenius API
-      if (spendingData && 
-          (Object.values(spendingData.monthly).some(val => val > 0) ||
-           Object.values(spendingData.annual).some(val => val > 0) ||
-           Object.values(spendingData.quarterly).some(val => val > 0))) {
-        const cardGeniusResponse = await fetch('https://bk-prod-external.bankkaro.com/cg/api/pro', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            ...spendingData,
-            new_monthly_cat_1: 0,
-            new_monthly_cat_2: 0,
-            new_monthly_cat_3: 0,
-            new_cat_1: 0,
-            new_cat_2: 0,
-            new_cat_3: 0,
-            selected_card_id: null
-          }),
-        })
-
-        if (!cardGeniusResponse.ok) {
-          throw new Error('Failed to get card recommendations')
-        }
-
-        const recommendations = await cardGeniusResponse.json()
-        return NextResponse.json({
-          message: aiResponse,
-          recommendations,
-          spending_data: spendingData
-        })
-      }
-    } catch (e) {
-      console.error('Failed to process spending data:', e)
-    }
-
-    // If no spending data or processing failed, return just the AI response
-    return NextResponse.json({ message: aiResponse })
+    return NextResponse.json(response)
   } catch (error) {
     console.error('API Error:', error)
     return NextResponse.json(
