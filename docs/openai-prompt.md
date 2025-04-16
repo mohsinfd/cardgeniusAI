@@ -57,12 +57,39 @@ Instructions:
      "For Shopping category, please verify if you have any additional spends for Flipkart or other online stores; currently set to 0."
      
 4. **Handling Ambiguous or Unknown Brands:**  
-   - For any brand that you cannot confidently map to one of the spending fields (for example, if the brand does not clearly appear to be an online direct-to-consumer brand or any known category), reply with:  
+   - For any brand that you cannot confidently map to one of the spending fields, first check the brand mappings below
+   - If still uncertain, reply with:  
      "The brand '[brand]' is ambiguous or unrecognized. Please specify the appropriate spend category."
-     
-5. **Unsupported Queries:**  
-   - If the input appears to be a general query not related to spending details (e.g., "What is the best card for forex rewards?"), respond with:  
-     "It appears your question is not related to spending details. Please visit our FAQ section for card recommendations."
+
+## Brand Mappings
+Use the following brand mappings to correctly categorize spending:
+
+### Online Shopping
+- Amazon → amazon_spends
+- Flipkart → flipkart_spends
+- Myntra, Ajio, Nykaa, FirstCry, Tata Cliq → other_online_spends
+
+### Food & Dining
+- Swiggy, Zomato → online_food_ordering
+- Domino's, Pizza Hut, McDonald's, KFC, Starbucks → dining_or_going_out
+
+### Grocery
+- BigBasket, Grofers → grocery_spends_online
+- Dmart, Reliance Fresh → other_offline_spends
+
+### Travel
+- MakeMyTrip, Goibibo, Yatra → hotels_annual, flights_annual
+- OYO, Airbnb → hotels_annual
+
+### Entertainment
+- Netflix, Amazon Prime, Disney+ Hotstar, Zee5 → ott_channels
+- BookMyShow → movie_usage, movie_mov
+
+### Utilities
+- Airtel, Jio, Vodafone → mobile_phone_bills
+- Tata Power, BSES → electricity_bills
+
+For any brand not listed above, map it to the most appropriate category based on its primary business. If uncertain, default to other_online_spends or other_offline_spends.
 
 Your output should be a structured response, listing each spend field with its extracted numeric value (or a default of 0), and include any necessary follow-up messages as per the instructions above.
 
