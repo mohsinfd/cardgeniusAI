@@ -1,9 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
+interface SpendingData {
+  [key: string]: number | null;
+}
+
 interface Message {
   role: 'user' | 'assistant';
   content: string;
+  spending_data?: SpendingData;
+  follow_up_question?: string;
 }
 
 interface ChatInterfaceProps {
@@ -33,6 +39,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) 
     setInput('');
     setIsLoading(true);
 
+    const startTime = performance.now();
     try {
       const response = await fetch('/api/chat', {
         method: 'POST',
@@ -46,7 +53,15 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) 
       if (!response.ok) throw new Error('Failed to get response');
 
       const data = await response.json();
-      const assistantMessage: Message = { role: 'assistant', content: data.message };
+      const apiTime = performance.now() - startTime;
+      console.log(`API Response Time: ${apiTime.toFixed(2)}ms`);
+
+      const assistantMessage: Message = {
+        role: 'assistant',
+        content: data.message,
+        spending_data: data.spending_data,
+        follow_up_question: data.follow_up_question
+      };
       setMessages(prev => [...prev, assistantMessage]);
     } catch (error) {
       console.error('Error:', error);
@@ -60,8 +75,38 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) 
     }
   };
 
+  const renderMessage = (message: Message) => {
+    return (
+      <div className="space-y-2">
+        <div className={`message ${message.role === 'user' ? 'user-message' : 'assistant-message'}`}>
+          {message.content}
+        </div>
+        
+        {message.spending_data && Object.keys(message.spending_data).length > 0 && (
+          <div className="bg-gray-800/50 p-3 rounded-lg text-sm border border-gray-700">
+            <div className="font-semibold mb-2 text-blue-400">Spending Data:</div>
+            {Object.entries(message.spending_data).map(([category, amount]) => (
+              amount !== null && (
+                <div key={category} className="flex justify-between py-1">
+                  <span className="text-gray-300">{category}:</span>
+                  <span className="font-medium text-blue-400">₹{amount}</span>
+                </div>
+              )
+            ))}
+          </div>
+        )}
+        
+        {message.follow_up_question && (
+          <div className="bg-blue-500/10 p-3 rounded-lg text-sm text-blue-400 border border-blue-500/20">
+            {message.follow_up_question}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
-    <div className={`flex flex-col h-[600px] bg-white rounded-lg shadow-lg ${className}`}>
+    <div className={`chat-container ${className}`}>
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.map((message, index) => (
           <motion.div
@@ -70,15 +115,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) 
             animate={{ opacity: 1, y: 0 }}
             className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
           >
-            <div
-              className={`max-w-[80%] p-3 rounded-lg ${
-                message.role === 'user'
-                  ? 'bg-blue-600 text-white rounded-br-none'
-                  : 'bg-gray-100 text-gray-800 rounded-bl-none'
-              }`}
-            >
-              {message.content}
-            </div>
+            {renderMessage(message)}
           </motion.div>
         ))}
         {isLoading && (
@@ -87,32 +124,34 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) 
             animate={{ opacity: 1 }}
             className="flex justify-start"
           >
-            <div className="bg-gray-100 p-3 rounded-lg rounded-bl-none">
-              <div className="flex space-x-2">
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-100" />
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-200" />
-              </div>
+            <div className="loading-dots">
+              <span></span>
+              <span></span>
+              <span></span>
             </div>
           </motion.div>
         )}
         <div ref={messagesEndRef} />
       </div>
-      <form onSubmit={handleSubmit} className="p-4 border-t">
-        <div className="flex space-x-2">
-          <input
-            type="text"
+      <form onSubmit={handleSubmit} className="search-container">
+        <div className="search-input-wrapper">
+          <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Type your message..."
-            className="flex-1 p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="search-input"
+            rows={1}
+            data-expanded={input.length > 0}
           />
           <button
             type="submit"
             disabled={isLoading || !input.trim()}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="send-button"
           >
-            Send
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M22 2L11 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
           </button>
         </div>
       </form>
