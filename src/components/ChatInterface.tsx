@@ -22,21 +22,42 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) 
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [currentPlaceholderIndex, setCurrentPlaceholderIndex] = useState(0);
+  const [showPlaceholder, setShowPlaceholder] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Get placeholders from user request scenarios
   const placeholders = userRequestScenarios.map(scenario => scenario.request);
 
-  // Cycle through placeholders every 2 seconds
+  // Cycle through placeholders every 2 seconds only on landing page
   useEffect(() => {
+    if (!showPlaceholder || messages.length > 0) return;
+    
+    console.log('Starting placeholder cycling');
     const interval = setInterval(() => {
-      setCurrentPlaceholderIndex((prevIndex) => 
-        prevIndex === placeholders.length - 1 ? 0 : prevIndex + 1
-      );
+      setCurrentPlaceholderIndex((prevIndex) => {
+        const newIndex = prevIndex === placeholders.length - 1 ? 0 : prevIndex + 1;
+        console.log('Cycling to placeholder:', newIndex, placeholders[newIndex]);
+        return newIndex;
+      });
     }, 2000);
 
-    return () => clearInterval(interval);
-  }, [placeholders.length]);
+    return () => {
+      console.log('Clearing placeholder interval');
+      clearInterval(interval);
+    };
+  }, [placeholders.length, showPlaceholder, messages.length]);
+
+  const handleInputFocus = () => {
+    console.log('Input focused, hiding placeholder');
+    setShowPlaceholder(false);
+  };
+
+  const handleInputBlur = () => {
+    if (messages.length === 0 && !input.trim()) {
+      console.log('Input blurred, showing placeholder');
+      setShowPlaceholder(true);
+    }
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -53,6 +74,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) 
     const userMessage: Message = { role: 'user', content: input };
     setMessages(prev => [...prev, userMessage]);
     setInput('');
+    setShowPlaceholder(false); // Keep placeholder hidden after first message
     setIsLoading(true);
 
     const startTime = performance.now();
@@ -103,27 +125,25 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) 
       <div className="space-y-2">
         <div className={`message ${message.role === 'user' ? 'user-message' : 'assistant-message'}`}>
           {message.content}
-        </div>
-        
-        {message.spending_data && Object.keys(message.spending_data).length > 0 && (
-          <div className="bg-gray-800/50 p-3 rounded-lg text-sm border border-gray-700">
-            <div className="font-semibold mb-2 text-blue-400">Spending Data:</div>
-            {Object.entries(message.spending_data).map(([category, amount]) => (
-              amount !== null && (
+          {message.role === 'assistant' && message.spending_data && Object.keys(message.spending_data).length > 0 && (
+            <div className="spending-data mt-2">
+              <div className="font-semibold mb-2 text-blue-400">Spending Data:</div>
+              {Object.entries(message.spending_data).map(([category, amount]) => (
                 <div key={category} className="flex justify-between py-1">
                   <span className="text-gray-300">{category}:</span>
-                  <span className="font-medium text-blue-400">₹{amount}</span>
+                  <span className={`font-medium ${amount === null ? 'text-gray-400' : 'text-green-400'}`}>
+                    {amount === null ? 'Not specified' : `₹${amount}`}
+                  </span>
                 </div>
-              )
-            ))}
-          </div>
-        )}
-        
-        {message.follow_up_question && (
-          <div className="bg-blue-500/10 p-3 rounded-lg text-sm text-blue-400 border border-blue-500/20">
-            {message.follow_up_question}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
+          {message.role === 'assistant' && message.follow_up_question && !message.content.includes(message.follow_up_question) && (
+            <div className="follow-up-question mt-2">
+              {message.follow_up_question}
+            </div>
+          )}
+        </div>
       </div>
     );
   };
@@ -162,7 +182,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) 
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={placeholders[currentPlaceholderIndex]}
+            onFocus={handleInputFocus}
+            onBlur={handleInputBlur}
+            placeholder={showPlaceholder ? placeholders[currentPlaceholderIndex] : ''}
             className="search-input"
             rows={1}
             data-expanded={input.length > 0}
@@ -173,8 +195,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) 
             className="send-button"
           >
             <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M22 2L11 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M5 12H19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M12 5L19 12L12 19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
           </button>
         </div>

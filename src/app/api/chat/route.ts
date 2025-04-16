@@ -1,191 +1,101 @@
 import { NextResponse } from 'next/server'
 import OpenAI from 'openai'
 
+// Debug logging
+console.log('Environment check:');
+console.log('- NODE_ENV:', process.env.NODE_ENV);
+console.log('- API Key exists:', !!process.env.OPENAI_API_KEY);
+console.log('- API Key length:', process.env.OPENAI_API_KEY?.length);
+console.log('- API Key starts with sk-:', process.env.OPENAI_API_KEY?.startsWith('sk-'));
+console.log('- API Key first 10 chars:', process.env.OPENAI_API_KEY?.substring(0, 10) + '...');
+
 if (!process.env.OPENAI_API_KEY) {
   throw new Error('Missing OPENAI_API_KEY environment variable')
 }
 
-// Initialize OpenAI client
+// Initialize OpenAI client with timeout
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
+  timeout: 10000 // 10 second timeout
 })
 
-const SYSTEM_PROMPT = `You are a credit card recommendation assistant. Your task is to:
-1. Extract spending data from user messages
-2. Ask relevant follow-up questions to gather more information
-3. Provide recommendations based on the user's needs
+// Simplified system prompt
+const SYSTEM_PROMPT = `You are a helpful AI assistant for CardGenius, a credit card recommendation system. Your task is to extract spending amounts from user messages and ask follow-up questions.
 
-For travel-related requests, ask about:
-- Domestic vs international travel frequency
-- Preferred airlines and hotel chains
-- Average annual spend on flights and hotels
-- Lounge access preferences
-- Travel insurance needs
+Rules:
+- Extract numeric values from text
+- Map to spending categories (amazon_spends, flipkart_spends, etc.)
+- Default unspecified fields to 0
+- Ask for clarification if amounts are ambiguous
+- Be friendly and professional
+- Always respond in valid JSON format
 
-When extracting spending data:
-- Look for amounts in the format "X lac" and convert to rupees (1 lac = 100,000)
-- Look for amounts with currency symbols (₹, Rs, etc.)
-- Look for amounts with words like "thousand", "lakh", "crore"
-- Update the spending_data object with the extracted values
+Response format (JSON):
+{
+  "message": "string",
+  "spending_data": { "category": number },
+  "follow_up_question": "string or null"
+}`;
 
-Always include relevant follow-up questions to gather more information, but avoid repeating questions that have already been answered.`
+// Simple cache for common responses
+const responseCache = new Map();
 
-interface SpendingData {
-  monthly: {
-    amazon_spends: number;
-    flipkart_spends: number;
-    grocery_spends_online: number;
-    online_food_ordering: number;
-    other_online_spends: number;
-    other_offline_spends: number;
-    dining_or_going_out: number;
-    fuel: number;
-    school_fees: number;
-    rent: number;
-    mobile_phone_bills: number;
-    electricity_bills: number;
-    water_bills: number;
-    ott_channels: number;
-  };
-  annual: {
-    hotels_annual: number;
-    flights_annual: number;
-    insurance_health_annual: number;
-    insurance_car_or_bike_annual: number;
-    large_electronics_purchase_like_mobile_tv_etc: number;
-  };
-  quarterly: {
-    domestic_lounge_usage_quarterly: number;
-    international_lounge_usage_quarterly: number;
-    railway_lounge_usage_quarterly: number;
-    movie_usage: number;
-    movie_mov: number;
-    dining_usage: number;
-    dining_mov: number;
-    online_food_ordering_mov: number;
-    online_food_ordering_usage: number;
-  };
-}
-
-// Helper function to check if we have sufficient data
-function hasSufficientData(spendingData: SpendingData, context: string[]): boolean {
-  // Check if any spending data is provided
-  const hasSpendingData = Object.values(spendingData.monthly).some(value => value > 0) ||
-                         Object.values(spendingData.annual).some(value => value > 0) ||
-                         Object.values(spendingData.quarterly).some(value => value > 0)
-
-  // Check if user has stated their primary requirement
-  const contextText = context.join(' ').toLowerCase()
-  const hasPrimaryRequirement = 
-    contextText.includes('travel') ||
-    contextText.includes('reward') ||
-    contextText.includes('cashback') ||
-    contextText.includes('student') ||
-    contextText.includes('business') ||
-    contextText.includes('fuel') ||
-    contextText.includes('dining')
-
-  return hasSpendingData && hasPrimaryRequirement
-}
-
-// Helper function to generate final confirmation question
-function generateConfirmationQuestion(spendingData: SpendingData, context: string[]): string {
-  const categories = []
-  const spends = []
-
-  // Check for primary category
-  const contextText = context.join(' ').toLowerCase()
-  if (contextText.includes('travel')) categories.push('travel')
-  if (contextText.includes('reward')) categories.push('rewards')
-  if (contextText.includes('cashback')) categories.push('cashback')
-  if (contextText.includes('student')) categories.push('student')
-  if (contextText.includes('business')) categories.push('business')
-  if (contextText.includes('fuel')) categories.push('fuel')
-  if (contextText.includes('dining')) categories.push('dining')
-
-  // Check for significant spends
-  if (spendingData.monthly.amazon_spends > 0) spends.push(`Amazon (₹${spendingData.monthly.amazon_spends}/month)`)
-  if (spendingData.monthly.flipkart_spends > 0) spends.push(`Flipkart (₹${spendingData.monthly.flipkart_spends}/month)`)
-  if (spendingData.monthly.dining_or_going_out > 0) spends.push(`Dining (₹${spendingData.monthly.dining_or_going_out}/month)`)
-  if (spendingData.monthly.fuel > 0) spends.push(`Fuel (₹${spendingData.monthly.fuel}/month)`)
-  if (spendingData.annual.flights_annual > 0) spends.push(`Flights (₹${spendingData.annual.flights_annual}/year)`)
-  if (spendingData.annual.hotels_annual > 0) spends.push(`Hotels (₹${spendingData.annual.hotels_annual}/year)`)
-
-  return `Based on our conversation, I'll look for a card that is best for:
-${categories.map(c => `- ${c}`).join('\n')}
-${spends.length > 0 ? `\nAnd optimized for your spends on:\n${spends.map(s => `- ${s}`).join('\n')}` : ''}
-
-Would you like to modify anything before I proceed with the recommendations?`
-}
-
-export async function POST(req: Request) {
+export async function POST(request: Request) {
   try {
-    const { message } = await req.json()
+    const body = await request.json();
+    const { message, context = [] } = body;
 
-    const completion = await openai.chat.completions.create({
-      messages: [
-        {
-          role: "system",
-          content: "You are CardGenius, an AI assistant that extracts spending amounts from user input. Extract numeric values and categorize them into appropriate spending categories."
-        },
-        { role: "user", content: message }
-      ],
-      model: "gpt-3.5-turbo",
-    })
-
-    const aiResponse = completion.choices[0].message.content
-    
-    // Parse the response to extract spending data
-    let spendingData: SpendingData | undefined
-    try {
-      // Attempt to parse spending data from AI response
-      const parsedResponse = JSON.parse(aiResponse)
-      spendingData = parsedResponse.spending_data as SpendingData
-      
-      // If we have valid spending data, call CardGenius API
-      if (spendingData && 
-          (Object.values(spendingData.monthly).some(val => val > 0) ||
-           Object.values(spendingData.annual).some(val => val > 0) ||
-           Object.values(spendingData.quarterly).some(val => val > 0))) {
-        const cardGeniusResponse = await fetch('https://bk-prod-external.bankkaro.com/cg/api/pro', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            ...spendingData,
-            new_monthly_cat_1: 0,
-            new_monthly_cat_2: 0,
-            new_monthly_cat_3: 0,
-            new_cat_1: 0,
-            new_cat_2: 0,
-            new_cat_3: 0,
-            selected_card_id: null
-          }),
-        })
-
-        if (!cardGeniusResponse.ok) {
-          throw new Error('Failed to get card recommendations')
-        }
-
-        const recommendations = await cardGeniusResponse.json()
-        return NextResponse.json({
-          message: aiResponse,
-          recommendations,
-          spending_data: spendingData
-        })
-      }
-    } catch (e) {
-      console.error('Failed to process spending data:', e)
+    // Check cache first
+    const cacheKey = JSON.stringify({ message, context });
+    const cachedResponse = responseCache.get(cacheKey);
+    if (cachedResponse) {
+      return NextResponse.json(cachedResponse);
     }
 
-    // If no spending data or processing failed, return just the AI response
-    return NextResponse.json({ message: aiResponse })
+    const startTime = performance.now();
+    
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4-0125-preview",
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        ...context,
+        { role: 'user', content: message }
+      ],
+      temperature: 0.7,
+      max_tokens: 500,
+      stream: false,
+      response_format: { type: "json_object" }
+    });
+
+    const response = completion.choices[0].message.content;
+    if (!response) {
+      throw new Error('No response from OpenAI');
+    }
+
+    const parsedResponse = JSON.parse(response);
+
+    const transformedResponse = {
+      message: parsedResponse.message,
+      spending_data: Object.entries(parsedResponse.spending_data || {}).reduce((acc, [key, value]) => {
+        const mappedKey = key.toLowerCase().replace(/\s+/g, '_');
+        acc[mappedKey] = typeof value === 'number' ? value : null;
+        return acc;
+      }, {} as Record<string, number | null>),
+      follow_up_question: parsedResponse.follow_up_question
+    };
+
+    responseCache.set(cacheKey, transformedResponse);
+    setTimeout(() => responseCache.delete(cacheKey), 5 * 60 * 1000);
+    
+    const endTime = performance.now();
+    console.log(`API Processing Time: ${(endTime - startTime).toFixed(2)}ms`);
+
+    return NextResponse.json(transformedResponse);
   } catch (error) {
-    console.error('API Error:', error)
+    console.error('Error processing chat:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Failed to process chat request' },
       { status: 500 }
-    )
+    );
   }
 } 

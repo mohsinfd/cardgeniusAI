@@ -51,10 +51,9 @@ Instructions:
    If a spending field is not mentioned, set its value to 0.
 
 3. **Follow-Up for Ambiguous or Missing Data:**  
-   - If a brand or spending field is mentioned without a clear numeric amount, reply with the message:  
-     "Please specify your spend for [field_name]."
-   - For Shopping fields (amazon_spends, flipkart_spends, other_online_spends), if only one brand is mentioned, include an additional message:  
-     "For Shopping category, please verify if you have any additional spends for Flipkart or other online stores; currently set to 0."
+   - If a brand or spending field is mentioned without a clear numeric amount, provide a single, natural follow-up question
+   - For Shopping fields (amazon_spends, flipkart_spends, other_online_spends), if only one brand is mentioned, ask about other platforms in the same message
+   - Example for Amazon: "I'd be happy to help you find a card for Amazon spending! How much do you typically spend on Amazon each month, and do you also shop on other online platforms?"
      
 4. **Handling Ambiguous or Unknown Brands:**  
    - For any brand that you cannot confidently map to one of the spending fields (for example, if the brand does not clearly appear to be an online direct-to-consumer brand or any known category), reply with:  

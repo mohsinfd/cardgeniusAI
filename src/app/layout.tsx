@@ -1,24 +1,24 @@
-import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
+import { FC, ReactNode } from 'react'
 
-const inter = Inter({ subsets: ['latin'] })
+const inter = Inter({ 
+  subsets: ['latin'],
+  display: 'swap',
+})
 
-export const metadata: Metadata = {
-  title: 'CardGenius AI',
-  description: 'AI-powered credit card recommendation system',
+interface RootLayoutProps {
+  children: ReactNode
 }
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+const RootLayout: FC<RootLayoutProps> = ({ children }) => {
   return (
-    <html lang="en">
-      <body className={`${inter.className} bg-gray-900 text-white`}>
+    <html lang="en" className={inter.className}>
+      <body>
         {children}
       </body>
     </html>
   )
-} 
+}
+
+export default RootLayout 
