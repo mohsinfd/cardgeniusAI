@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { userRequestScenarios } from '../data/user-request-scenarios';
 
 interface SpendingData {
   [key: string]: number | null;
@@ -20,7 +21,22 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [currentPlaceholderIndex, setCurrentPlaceholderIndex] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Get placeholders from user request scenarios
+  const placeholders = userRequestScenarios.map(scenario => scenario.request);
+
+  // Cycle through placeholders every 2 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentPlaceholderIndex((prevIndex) => 
+        prevIndex === placeholders.length - 1 ? 0 : prevIndex + 1
+      );
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [placeholders.length]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -146,7 +162,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) 
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Tell me about your spending habits..."
+            placeholder={placeholders[currentPlaceholderIndex]}
             className="search-input"
             rows={1}
             data-expanded={input.length > 0}
