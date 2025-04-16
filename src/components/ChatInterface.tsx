@@ -75,6 +75,13 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) 
     }
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit(e as unknown as React.FormEvent);
+    }
+  };
+
   const renderMessage = (message: Message) => {
     return (
       <div className="space-y-2">
@@ -138,7 +145,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) 
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Type your message..."
+            onKeyDown={handleKeyDown}
+            placeholder="Tell me about your spending habits..."
             className="search-input"
             rows={1}
             data-expanded={input.length > 0}
