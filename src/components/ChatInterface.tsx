@@ -223,11 +223,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) 
                   )}
                 </div>
               </div>
-              {card.product_usps.length > 0 && (
+              {card.product_usps?.length > 0 && (
                 <div className="mt-3 pt-3 border-t border-gray-200">
                   <h4 className="text-sm font-medium text-gray-700">Key Benefits:</h4>
                   <ul className="mt-1 space-y-1">
-                    {card.product_usps.slice(0, 2).map((usp, idx) => (
+                    {card.product_usps?.slice(0, 2).map((usp, idx) => (
                       <li key={idx} className="text-xs text-gray-600">
                         • {usp.header}
                       </li>
