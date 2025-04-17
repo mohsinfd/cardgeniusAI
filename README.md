@@ -1,15 +1,35 @@
 # CardGenius AI
 
-An AI-powered chatbot that extracts spending amounts from user input and provides credit card recommendations.
+A Next.js application for intelligent credit card recommendations.
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fmohsinfd%2FcardgeniusAI)
 
 ## Features
 
-- Free-form text input processing
-- AI-powered spend extraction
-- Mobile-responsive interface
-- Real-time follow-up prompts
-- Secure API integration
-- Credit card recommendations
+- Intelligent credit card recommendations based on spending patterns
+- Real-time chat interface for user interaction
+- Integration with CardGenius API for accurate recommendations
+- Modern UI with responsive design
+
+## Getting Started
+
+1. Clone the repository
+2. Install dependencies: `npm install`
+3. Create a `.env.local` file with your OpenAI API key
+4. Run the development server: `npm run dev`
+
+## Environment Variables
+
+- `OPENAI_API_KEY`: Your OpenAI API key
+- `CARDGENIUS_API_KEY`: Your CardGenius API key (for production)
+
+## Deployment
+
+The application is configured for deployment on Vercel. The `vercel.json` file contains the necessary configuration for the deployment.
+
+## License
+
+MIT
 
 ## Tech Stack
 
@@ -19,44 +39,6 @@ An AI-powered chatbot that extracts spending amounts from user input and provide
 - Tailwind CSS
 - OpenAI API
 - Framer Motion
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js 18.x or later
-- OpenAI API key
-- npm or yarn
-
-### Installation
-
-1. Clone the repository:
-   ```bash
-   git clone [repository-url]
-   cd cardgenius
-   ```
-
-2. Install dependencies:
-   ```bash
-   npm install
-   # or
-   yarn install
-   ```
-
-3. Create a `.env` file:
-   ```bash
-   cp .env.example .env
-   ```
-   Then edit `.env` and add your OpenAI API key.
-
-4. Run the development server:
-   ```bash
-   npm run dev
-   # or
-   yarn dev
-   ```
-
-5. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ## Project Structure
 
@@ -111,10 +93,6 @@ yarn test
 3. Commit your changes
 4. Push to the branch
 5. Create a Pull Request
-
-## License
-
-[License details to be added]
 
 ---
 
