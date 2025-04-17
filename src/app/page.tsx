@@ -1,9 +1,13 @@
 'use client'
 
-import { ChatInterface } from '../components/ChatInterface';
+import { useState } from 'react'
+import { ChatInterface } from '@/components/ChatInterface'
+import { Message } from '@/types/message'
 import '../styles/Home.css';
 
 export default function Home() {
+  console.log('BBBBBB');
+  
   return (
     <div className="container">
       <header className="app-header">

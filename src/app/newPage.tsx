@@ -3,8 +3,8 @@
 'use client'
 
 import { useState } from 'react'
-import ChatInterface from '@/components/ChatInterface'
-import { Message } from '@/types/chat'
+import { ChatInterface } from '@/components/ChatInterface'
+import { Message } from '@/types/message'
 
 export default function NewPage() {
   const [messages, setMessages] = useState<Message[]>([])
@@ -14,29 +14,30 @@ export default function NewPage() {
   const handleMessageSubmit = async (message: string) => {
     setIsLoading(true)
     try {
+      const newMessage: Message = {
+        id: Date.now().toString(),
+        content: message,
+        role: 'user',
+        timestamp: new Date().toISOString()
+      }
+      setMessages(prev => [...prev, newMessage])
+
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          message,
-          context: messages.map(m => m.content),
-          unansweredQuestions: followUpQuestions,
-        }),
+        body: JSON.stringify({ message }),
       })
 
-      if (!response.ok) {
-        throw new Error('Failed to send message')
-      }
-
       const data = await response.json()
-      
-      // Add user message
-      setMessages(prev => [...prev, { role: 'user', content: message }])
-      
-      // Add assistant message
-      setMessages(prev => [...prev, { role: 'assistant', content: data.message }])
+      const assistantMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        content: data.content,
+        role: 'assistant',
+        timestamp: new Date().toISOString()
+      }
+      setMessages(prev => [...prev, assistantMessage])
       
       // Update follow-up questions
       if (data.follow_up_messages && data.follow_up_messages.length > 0) {
@@ -50,31 +51,10 @@ export default function NewPage() {
   }
 
   return (
-    <main className="min-h-screen bg-white flex items-center justify-center">
-      <div className="w-[75%] max-w-4xl mx-auto px-4 py-8">
-        {/* Follow-up Questions Box */}
-        {followUpQuestions.length > 0 && (
-          <div className="mb-6 max-h-40 overflow-y-auto bg-gray-50 rounded-lg p-4 shadow-sm">
-            <h3 className="text-sm font-medium text-gray-700 mb-2">Follow-up Questions:</h3>
-            <ul className="space-y-2">
-              {followUpQuestions.map((question, index) => (
-                <li key={index} className="text-sm text-gray-600">
-                  {question}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {/* Chat Interface */}
-        <div className="w-full">
-          <ChatInterface
-            onMessageSubmit={handleMessageSubmit}
-            messages={messages}
-            isLoading={isLoading}
-          />
-        </div>
+    <main className="flex min-h-screen flex-col items-center justify-between p-24">
+      <div className="z-10 max-w-5xl w-full items-center justify-between font-mono text-sm">
+        <ChatInterface className="w-full" />
       </div>
     </main>
-  )
+  );
 } 
